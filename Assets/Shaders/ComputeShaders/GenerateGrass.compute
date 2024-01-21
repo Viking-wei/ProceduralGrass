@@ -1,0 +1,182 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel GrassProcess
+#pragma multi_compile_local __ DISTANCE_CULL_ENABLED
+
+struct GrassPropertiesStruct
+{
+    float3 position;
+    float angle;
+    float height;
+    float width;
+    float tilt;
+    float bend;
+    float hash;
+    float windForce;
+    float3 surfaceNorm;
+    float charaDistPower;
+};
+
+struct ClumpArgsStruct {
+    float pullToCentre;
+    float pointInSameDirection;
+    float baseHeight;
+    float heightRandom;
+    float baseWidth;
+    float widthRandom;
+    float baseTilt;
+    float tiltRandom;
+    float baseBend;
+    float bendRandom;
+};
+
+StructuredBuffer<ClumpArgsStruct> ClumpArgs;
+AppendStructuredBuffer<GrassPropertiesStruct> GrassProperties;
+
+Texture2D _heightMap;
+SamplerState sampler_heightMap;
+Texture2D _grassMap;
+SamplerState sampler_grassMap;
+Texture2D _globalWindMap;
+SamplerState sampler_globalWindMap;
+Texture2D _clumpTex;
+SamplerState sampler_clumpTex;
+
+//xyz:GrassMask.size w:GrassMask.heightmapResolution
+float4 _terrainSize;
+//xyz:terrain position w:GrassMask.alphamapResolution
+float4 _terrainOrigin;
+float _perGrassTileSize;
+float _jitterStrength;
+float _globalWindStrength;
+float _globalWindDirection;
+float _rotationRandom;
+float4 _characterPosition;
+float4 _cameraPosition;
+float4 _timeCs;
+float _globalWindSpeed;
+uint _grassResolution;
+float4x4 _WorldToHClipMatrix;
+float _CullDistancePower;
+
+float2 hashwithoutsine22(float2 p)
+{
+    float3 p3 = frac(float3(p.xyx) * float3(.1031, .1030, .0973));
+    p3 += dot(p3, p3.yzx+33.33);
+    return frac((p3.xx+p3.yz)*p3.zy);
+}
+
+float rand(float3 co)
+{
+    return frac(sin(dot(co.xyz, float3(12.9898, 78.233, 53.539))) * 43758.5453);
+}
+
+float2 Angle2Dir(float angle)
+{
+    angle=angle*3.14159;
+    return float2(cos(angle),sin(angle));
+}
+
+float remap01_neg11(float t)
+{
+    return (t*2)-1;
+}
+
+float3 GetPosWithHeight(float2 uv)
+{
+    float rawHeight=_heightMap.SampleLevel(sampler_heightMap,uv,0).r;
+    float processedHeight= rawHeight*_terrainSize.y*2;
+    return float3(uv.x,processedHeight,uv.y)*float3(_terrainSize.x,1,_terrainSize.z)+_terrainOrigin.xyz;
+}
+
+uint FrustumCull(float4 clipPos){
+    return(clipPos.z > clipPos.w 
+    || clipPos.z < - clipPos.w 
+    || clipPos.x < - clipPos.w -4 
+    || clipPos.x > clipPos.w + 4
+    || clipPos.y < - clipPos.w -4
+    || clipPos.y > clipPos.w)
+        ? 1: 0;
+}
+
+uint DistanceCull(float3 grassPos)
+{
+    float3 grassToCamVec=_cameraPosition.xyz-grassPos;
+    float distancePower=dot(grassToCamVec,grassToCamVec);
+    return distancePower>_CullDistancePower?1:0;
+}
+
+[numthreads(8,8,1)]
+void GrassProcess (uint3 id : SV_DispatchThreadID)
+{
+    GrassPropertiesStruct OUT;
+    float posX=id.x*_perGrassTileSize;
+    float posZ=id.y*_perGrassTileSize;
+    float2 sampleUV=float2(posX/_terrainSize.x,posZ/_terrainSize.z);
+    float isGrassGrown=_grassMap.SampleLevel(sampler_grassMap,sampleUV,0).g;
+    if(isGrassGrown<0.2)
+        return;
+
+    float3 rawClumpData=_clumpTex.SampleLevel(sampler_clumpTex,sampleUV,0).rgb;
+    ClumpArgsStruct clumpArgs=ClumpArgs[(int)rawClumpData.r];
+    float2 clumpCenter=rawClumpData.gb*_terrainSize.xz;
+    float2 grassXZPos=float2(posX,posZ);
+    grassXZPos=lerp(grassXZPos,clumpCenter,clumpArgs.pullToCentre);
+    float2 heightSampleUV=grassXZPos/_terrainSize.xz;
+    float3 positionWS=GetPosWithHeight(heightSampleUV);
+
+    float hash=rand(id.yxy);
+    float2 jitter = ((hash*2)-1 ) * _jitterStrength;
+    positionWS.xz+=jitter;
+
+    float4 positonHCS=mul(_WorldToHClipMatrix,float4(positionWS,1));
+    uint frustumCull=FrustumCull(positonHCS);
+
+    uint distanceCull=0;
+    
+    #if DISTANCE_CULL_ENABLED
+    distanceCull=DistanceCull(positionWS);
+    #endif
+    
+    if(frustumCull||distanceCull)
+        return;
+
+    float2 biTangentSampleUV=heightSampleUV+float2(2,0)/_terrainSize.xz;
+    float3 biTangentWS=GetPosWithHeight(biTangentSampleUV);
+
+    float2 tangentSampleUV=heightSampleUV+float2(0,2)/_terrainSize.xz;
+    float3 tangentWS=GetPosWithHeight(tangentSampleUV);
+
+    float3 bitangentVec=biTangentWS-positionWS;
+    float3 tangentVec=tangentWS-positionWS;
+    OUT.surfaceNorm=normalize(mul(tangentVec,bitangentVec));
+    
+    
+
+    float globalWind=_globalWindMap.SampleLevel(sampler_globalWindMap,sampleUV+_timeCs.x*_globalWindSpeed,0).r;
+    OUT.windForce=globalWind*_globalWindStrength;
+    
+    
+
+    float3 grassToCharacterVec=_characterPosition.xyz-positionWS.xyz;
+    float distanceToCharacter=dot(grassToCharacterVec,grassToCharacterVec);
+    float2 grassToCharacterXZVec=normalize(grassToCharacterVec.xz);
+    
+    OUT.position=positionWS;
+    OUT.height=clumpArgs.baseHeight+remap01_neg11(rand(id.xxy))*clumpArgs.heightRandom;
+    OUT.width=clumpArgs.baseWidth+remap01_neg11(rand(id.yyx))*clumpArgs.widthRandom;
+    OUT.tilt=clumpArgs.baseTilt+rand(id.yxy)*clumpArgs.tiltRandom;
+    OUT.bend=clumpArgs.baseBend+rand(id.xyy)*clumpArgs.bendRandom;
+    OUT.hash=hash;
+    
+    float2 randomFacing=normalize(2*hashwithoutsine22(id.xy)-1);
+    float2 clumpHash=hashwithoutsine22(clumpCenter);
+    float2 clumpFacing=normalize(tan(clumpHash+float2(0.12,1.23))*2-1);
+    float2 bladeFacing=lerp(randomFacing,clumpFacing,clumpArgs.pointInSameDirection);
+    OUT.charaDistPower=distanceToCharacter;
+    // float2 windFacing=Angle2Dir(_globalWindDirection);
+    // bladeFacing=normalize(lerp(bladeFacing,windFacing,globalWind));
+    OUT.angle=atan2(bladeFacing.y,bladeFacing.x);
+    
+    GrassProperties.Append(OUT);
+    
+}
