@@ -6,6 +6,6 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
-    path: Assets/Scenes/FinalScene.unity
+    path: Assets/Scenes/ProceduralGrass.unity
     guid: 1e940b007b4a76e41a2dfe3a4dc62790
   m_configObjects: {}
