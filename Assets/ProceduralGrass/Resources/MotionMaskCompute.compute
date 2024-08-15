@@ -1,0 +1,43 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSMain
+#pragma kernel Initial
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+int4 Resolution;
+float4 Offset;
+float FadeSpeed;
+float SoftEdge;
+RWTexture2D<float2> PreResult;
+RWTexture2D<float2> CurResult;
+
+uint2 ClampId(uint2 id,uint2 Resolution)
+{
+    return uint2(min(max(id.x,0),Resolution.x-1),min(max(id.y,0),Resolution.y-1));
+}
+
+float2 Remapn11_01(float2 value)
+{
+    return 0.5*value+0.5;
+}
+
+[numthreads(8,8,1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+    float2 center=float2(Resolution.x,Resolution.y)/2;
+    float dist=distance(center,float2(id.x,id.y))*0.707/(float)Resolution.x;
+    dist=1-smoothstep(0,SoftEdge,dist);
+    float2 vec=normalize(float2(id.x,id.y)-center);
+    vec=Remapn11_01(vec)*dist;
+     uint2 preId=id.xy+int2(Offset.xz+float2(0.5,0.5));
+    preId=ClampId(preId,Resolution.xy);
+     float2 preResult = PreResult[preId];
+    preResult-=FadeSpeed;
+    saturate(preResult);
+    CurResult[id.xy] = max(vec,preResult);
+}
+
+[numthreads(8,8,1)]
+void Initial(uint3 id : SV_DispatchThreadID)
+{
+    CurResult[id.xy]=float2(1,1);
+}

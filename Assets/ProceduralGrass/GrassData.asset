@@ -1,0 +1,58 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 47497ab46bed52845b3ef0c865ad4e9b, type: 3}
+  m_Name: GrassData
+  m_EditorClassIdentifier: 
+  GlobalWindMap: {fileID: 2800000, guid: 0e650c4243d8a8344a0eee106ee8c8db, type: 3}
+  GrassMask: {fileID: 15600000, guid: 859010d20a4e8fa4297498c5ffebd5da, type: 2}
+  GrassPrefab: {fileID: 919132149155446097, guid: 62db5cd290f1db940a8f8558f442ef5e,
+    type: 3}
+  GrassLayer: 1
+  grassChannel: 1
+  Preference: 10000
+  GrassColor: {r: 0, g: 1, b: 0, a: 1}
+  Density: 4096
+  Jitter: 1.09
+  RotationRandom: 0.527
+  ClumpDensity: 9
+  EnableClump: 1
+  ClumpArgs:
+  - PullToCentre: 0
+    PointInSameDirection: 0.326
+    BaseHeight: 2.62
+    HeightRandom: 0.132
+    BaseWidth: 0.04
+    WidthRandom: 0
+    BaseTilt: 1.03
+    TiltRandom: 0
+    BaseBend: 0
+    BendRandom: 0
+  - PullToCentre: 0
+    PointInSameDirection: 0.429
+    BaseHeight: 1.49
+    HeightRandom: 0.132
+    BaseWidth: 0.04
+    WidthRandom: 0
+    BaseTilt: 0.98
+    TiltRandom: 0
+    BaseBend: 0
+    BendRandom: 0
+  - PullToCentre: 0.034
+    PointInSameDirection: 0.434
+    BaseHeight: 1.71
+    HeightRandom: 0.132
+    BaseWidth: 0.04
+    WidthRandom: 0
+    BaseTilt: 0.79
+    TiltRandom: 0
+    BaseBend: 0
+    BendRandom: 0
